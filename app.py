@@ -8,10 +8,12 @@ from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
 from sklearn.preprocessing import StandardScaler
+from sklearn.neighbors import LocalOutlierFactor
 
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+dataframe = None
 
 
 def parse_content(content, filename, is_vec):
@@ -46,13 +48,13 @@ def parse_contents(list_of_contents, list_of_names):
             df_meta = parse_content(contents, filename, False)
             print(df_meta.head)
 
-    # try:
-    return load_data(df_vec, df_meta)
-    # except Exception as e:
-    #     print(e)
-    #     return html.Div([
-    #         'There was an error processing this file.'
-    #     ])
+    try:
+        return load_data(df_vec, df_meta)
+    except Exception as e:
+        print(e)
+        return html.Div([
+            'There was an error processing this file.'
+        ])
 
 
 def load_data(df_vec, df_meta):
@@ -60,24 +62,41 @@ def load_data(df_vec, df_meta):
     # reducer = umap.UMAP(n_components=3)
 
     data = df_vec[df_vec.columns].values
+    print("Scaling data")
     scaled_data = StandardScaler().fit_transform(data)
+    print("Fitting to UMAP")
     embedding = reducer.fit_transform(scaled_data, y=df_meta['FAQ_id'])
-
-    print(embedding.shape)
+    print("Embedding shape: " + str(embedding.shape))
     embedding_df = pd.DataFrame(embedding, columns=['x', 'y'])
     # embedding_df = pd.DataFrame(embedding, columns=['x', 'y', 'z'])
     final_df = embedding_df.join(df_meta)
-    return make_figure(final_df)
+    global dataframe
+    dataframe = final_df
+    return make_figure()
 
 
-def make_figure(dataframe):
+def get_outliers():
+    print(dataframe)
+    data = dataframe[['x', 'y']].values
+    print(data)
+    outlier_scores = LocalOutlierFactor(contamination=0.01).fit_predict(data)
+
+    dataWithOutliers = dataframe.join(pd.DataFrame(outlier_scores, columns=['outlier_score']))
+    outlying_text = dataWithOutliers.loc[dataWithOutliers['outlier_score'] == -1]['question']
+    print(outlying_text.shape)
+    print(outlying_text)
+    return outlying_text
+
+
+def make_figure():
+    print("Plotting scatterplot")
     fig = px.scatter(dataframe, x='x', y='y', color='FAQ_id', hover_name='question')
     # fig = px.scatter_3d(dataframe, x='x', y='y', z='z', color='FAQ_id', hover_name='question')
     return html.Div([
         dcc.Graph(
             id='scatter',
             figure=fig
-        )
+        ),
     ])
 
 
@@ -92,6 +111,22 @@ def update_output(list_of_contents, list_of_names):
         return children
 
 
+@app.callback(
+    dash.dependencies.Output('outlier-list', 'children'),
+    [dash.dependencies.Input('outliers-btn', 'n_clicks')])
+def update_output(n_clicks):
+    print(n_clicks)
+    if n_clicks > 0:
+        try:
+            outlying_text = get_outliers()
+            return outlying_text
+        except Exception as e:
+            print(e)
+            return html.Div([
+                'Please load data'
+            ])
+
+
 app.layout = html.Div(children=[
     html.H1(children='Multilingual NLP Explorer'),
 
@@ -104,6 +139,8 @@ app.layout = html.Div(children=[
 
     html.Div(id='output-data-upload'),
 
+    html.Button('Get Outliers', id='outliers-btn', n_clicks=0),
+    html.Div(id='outlier-list'),
 ])
 
 if __name__ == '__main__':
