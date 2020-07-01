@@ -14,8 +14,8 @@ external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
 
-def parse_contents(contents, filename):
-    content_type, content_string = contents.split(',')
+def parse_content(content, filename):
+    content_type, content_string = content.split(',')
     decoded = base64.b64decode(content_string)
     try:
         if 'csv' in filename:
@@ -29,22 +29,39 @@ def parse_contents(contents, filename):
         return html.Div([
             'There was an error processing this file.'
         ])
-    df = df.drop(df.columns[0], axis=1)
-    return load_data(df)
+    return df
 
 
-def load_data(df):
+def parse_contents(list_of_contents, list_of_names):
+    for contents, filename in zip(list_of_contents, list_of_names):
+        if 'vec' in filename:
+            df_vec = parse_content(contents, filename)
+        if 'meta' in filename:
+            df_meta = parse_content(contents, filename)
+    try:
+        return load_data(df_vec, df_meta)
+    except Exception as e:
+        print(e)
+        return html.Div([
+            'There was an error processing this file.'
+        ])
+
+
+def load_data(df_vec, df_meta):
+    df_vec = df_vec.drop(df_vec.columns[0], axis=1)
     reducer = umap.UMAP(n_components=3)
-    data = df[df.columns].values
+    data = df_vec[df_vec.columns].values
     scaled_data = StandardScaler().fit_transform(data)
     embedding = reducer.fit_transform(scaled_data)
-    print(embedding)
+
     print(embedding.shape)
-    return make_figure(pd.DataFrame(embedding, columns=['x', 'y', 'z']))
+    embedding_df = pd.DataFrame(embedding, columns=['x', 'y', 'z'])
+    final_df = embedding_df.join(df_meta)
+    return make_figure(final_df)
 
 
 def make_figure(dataframe):
-    fig = px.scatter_3d(dataframe, x='x', y='y', z='z')
+    fig = px.scatter_3d(dataframe, x='x', y='y', z='z', color='FAQ_id', hover_name='question')
     return html.Div([
         dcc.Graph(
             id='scatter',
@@ -56,10 +73,13 @@ def make_figure(dataframe):
 @app.callback(Output('output-data-upload', 'children'),
               [Input('upload-data', 'contents')],
               [State('upload-data', 'filename')])
-def update_output(content, name):
-    if content is not None:
+def update_output(list_of_contents, list_of_names):
+    if list_of_contents is not None:
         children = [
-            parse_contents(content, name)]
+            # parse_contents(c, n) for c, n in
+            # zip(list_of_contents, list_of_names)
+            parse_contents(list_of_contents, list_of_names)
+        ]
         return children
 
 
@@ -70,7 +90,7 @@ app.layout = html.Div(children=[
         Exploratory data analysis for multilingual NLP.
     '''),
     html.Hr(),
-    dcc.Upload(id='upload-data', children=html.Button('Upload File'), multiple=False),
+    dcc.Upload(id='upload-data', children=html.Button('Upload Files'), multiple=True),
     html.Hr(),
 
     html.Div(id='output-data-upload'),
