@@ -1,6 +1,7 @@
 import base64
 import io
 import plotly.express as px
+import plotly.graph_objects as go
 import pandas as pd
 import umap
 import dash
@@ -13,7 +14,8 @@ from sklearn.neighbors import LocalOutlierFactor
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-dataframe = None
+embedded_data = None
+raw_data = None
 
 
 def parse_content(content, filename, is_vec):
@@ -64,37 +66,52 @@ def load_data(df_vec, df_meta):
     data = df_vec[df_vec.columns].values
     print("Scaling data")
     scaled_data = StandardScaler().fit_transform(data)
+    global raw_data
+    raw_data = scaled_data
     print("Fitting to UMAP")
     embedding = reducer.fit_transform(scaled_data, y=df_meta['FAQ_id'])
     print("Embedding shape: " + str(embedding.shape))
     embedding_df = pd.DataFrame(embedding, columns=['x', 'y'])
     # embedding_df = pd.DataFrame(embedding, columns=['x', 'y', 'z'])
     final_df = embedding_df.join(df_meta)
-    global dataframe
-    dataframe = final_df
+    global embedded_data
+    embedded_data = final_df
     return make_figure()
 
 
 def get_outliers():
-    print(dataframe)
-    data = dataframe[['x', 'y']].values
-    print(data)
-    outlier_scores = LocalOutlierFactor(contamination=0.01).fit_predict(data)
+    outlier_scores = LocalOutlierFactor(n_neighbors=10, contamination='auto').fit_predict(raw_data)
+    joined = embedded_data.join(pd.DataFrame(outlier_scores, columns=['outlier_score']))
 
-    dataWithOutliers = dataframe.join(pd.DataFrame(outlier_scores, columns=['outlier_score']))
-    outlying_text = dataWithOutliers.loc[dataWithOutliers['outlier_score'] == -1]['question']
-    print(outlying_text.shape)
-    print(outlying_text)
-    return outlying_text
+    outliers = joined.loc[joined['outlier_score'] == -1]
+    outlier_cats = outliers.FAQ_id.unique()
+
+    final_df = joined[joined['FAQ_id'].isin(list(outlier_cats))]
+    final_df.loc[final_df['outlier_score'] == -1, 'outlier_score'] = 4
+    final_df['FAQ_id'] = pd.to_numeric(final_df['FAQ_id'])
+
+    fig_outlier = go.Figure(data=go.Scatter(
+        x=final_df['x'],
+        y=final_df['y'],
+        mode='markers',
+        text=final_df['question'],
+        marker=dict(symbol=final_df['outlier_score'], color=final_df['FAQ_id'])
+    ))
+    return html.Div([
+        dcc.Graph(
+            id='scatterplot-outliers',
+            figure=fig_outlier
+        ),
+    ])
 
 
 def make_figure():
     print("Plotting scatterplot")
-    fig = px.scatter(dataframe, x='x', y='y', color='FAQ_id', hover_name='question')
+    fig = px.scatter(embedded_data, x='x', y='y', color='FAQ_id', hover_name='question')
     # fig = px.scatter_3d(dataframe, x='x', y='y', z='z', color='FAQ_id', hover_name='question')
     return html.Div([
         dcc.Graph(
-            id='scatter',
+            id='scatterplot',
             figure=fig
         ),
     ])
@@ -118,8 +135,7 @@ def update_output(n_clicks):
     print(n_clicks)
     if n_clicks > 0:
         try:
-            outlying_text = get_outliers()
-            return outlying_text
+            return get_outliers()
         except Exception as e:
             print(e)
             return html.Div([
