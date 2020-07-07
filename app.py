@@ -8,6 +8,7 @@ import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_table
 from sklearn.preprocessing import StandardScaler
 from sklearn.neighbors import LocalOutlierFactor
 
@@ -76,7 +77,7 @@ def load_data(df_vec, df_meta):
     final_df = embedding_df.join(df_meta)
     global embedded_data
     embedded_data = final_df
-    return make_figure()
+    return display_scatter()
 
 
 def get_outliers():
@@ -89,23 +90,32 @@ def get_outliers():
     final_df = joined[joined['FAQ_id'].isin(list(outlier_cats))]
     final_df.loc[final_df['outlier_score'] == -1, 'outlier_score'] = 4
     final_df['FAQ_id'] = pd.to_numeric(final_df['FAQ_id'])
+    return final_df
 
+
+def display_outliers(data):
     fig_outlier = go.Figure(data=go.Scatter(
-        x=final_df['x'],
-        y=final_df['y'],
+        x=data['x'],
+        y=data['y'],
         mode='markers',
-        text=final_df['question'],
-        marker=dict(symbol=final_df['outlier_score'], color=final_df['FAQ_id'])
+        text=data['question'],
+        marker=dict(symbol=data['outlier_score'], color=data['FAQ_id'])
     ))
+    table_data = data.drop(['outlier_score'], axis=1)[data['outlier_score'] == 4]
     return html.Div([
         dcc.Graph(
             id='scatterplot-outliers',
             figure=fig_outlier
         ),
+        dash_table.DataTable(
+            id='outlier_table',
+            columns=[{"name": i, "id": i} for i in table_data.columns],
+            data=table_data.to_dict('records')
+        )
     ])
 
 
-def make_figure():
+def display_scatter():
     print("Plotting scatterplot")
     fig = px.scatter(embedded_data, x='x', y='y', color='FAQ_id', hover_name='question')
     # fig = px.scatter_3d(dataframe, x='x', y='y', z='z', color='FAQ_id', hover_name='question')
@@ -135,7 +145,8 @@ def update_output(n_clicks):
     print(n_clicks)
     if n_clicks > 0:
         try:
-            return get_outliers()
+            outliers = get_outliers()
+            return display_outliers(outliers)
         except Exception as e:
             print(e)
             return html.Div([
@@ -155,7 +166,7 @@ app.layout = html.Div(children=[
 
     html.Div(id='output-data-upload'),
 
-    html.Button('Get Outliers', id='outliers-btn', n_clicks=0),
+    html.Button('Get Local Outliers', id='outliers-btn', n_clicks=0),
     html.Div(id='outlier-list'),
 ])
 
