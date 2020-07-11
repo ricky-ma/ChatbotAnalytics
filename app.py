@@ -15,8 +15,6 @@ from sklearn.neighbors import LocalOutlierFactor
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
-embedded_data = None
-raw_data = None
 
 
 def parse_content(content, filename, is_vec):
@@ -81,8 +79,10 @@ def load_data(df_vec, df_meta):
 
 
 def get_outliers():
-    outlier_scores = LocalOutlierFactor(n_neighbors=10, contamination='auto').fit_predict(raw_data)
+    lof = LocalOutlierFactor(n_neighbors=10, contamination='auto')
+    outlier_scores = lof.fit_predict(raw_data)
     joined = embedded_data.join(pd.DataFrame(outlier_scores, columns=['outlier_score']))
+    joined['negative_outlier_factor'] = lof.negative_outlier_factor_
 
     outliers = joined.loc[joined['outlier_score'] == -1]
     outlier_cats = outliers.FAQ_id.unique()
@@ -110,7 +110,9 @@ def display_outliers(data):
         dash_table.DataTable(
             id='outlier_table',
             columns=[{"name": i, "id": i} for i in table_data.columns],
-            data=table_data.to_dict('records')
+            data=table_data.to_dict('records'),
+            filter_action="native",
+            sort_action="native"
         )
     ])
 
