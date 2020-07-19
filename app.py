@@ -3,18 +3,18 @@ import io
 import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
-import umap
 import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
 import dash_table
-from sklearn.preprocessing import StandardScaler
-from sklearn.neighbors import LocalOutlierFactor
 
+from analysis import get_outliers, load_data
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+raw_data = None
+embedded_data = pd.DataFrame()
 
 
 def parse_content(content, filename, is_vec):
@@ -50,47 +50,13 @@ def parse_contents(list_of_contents, list_of_names):
             print(df_meta.head)
 
     try:
-        return load_data(df_vec, df_meta)
+        global raw_data, embedded_data
+        raw_data, embedded_data = load_data(df_vec, df_meta)
     except Exception as e:
         print(e)
         return html.Div([
             'There was an error processing this file.'
         ])
-
-
-def load_data(df_vec, df_meta):
-    reducer = umap.UMAP(n_components=2)
-    # reducer = umap.UMAP(n_components=3)
-
-    data = df_vec[df_vec.columns].values
-    print("Scaling data")
-    scaled_data = StandardScaler().fit_transform(data)
-    global raw_data
-    raw_data = scaled_data
-    print("Fitting to UMAP")
-    embedding = reducer.fit_transform(scaled_data, y=df_meta['FAQ_id'])
-    print("Embedding shape: " + str(embedding.shape))
-    embedding_df = pd.DataFrame(embedding, columns=['x', 'y'])
-    # embedding_df = pd.DataFrame(embedding, columns=['x', 'y', 'z'])
-    final_df = embedding_df.join(df_meta)
-    global embedded_data
-    embedded_data = final_df
-    return display_scatter()
-
-
-def get_outliers():
-    lof = LocalOutlierFactor(n_neighbors=10, contamination='auto')
-    outlier_scores = lof.fit_predict(raw_data)
-    joined = embedded_data.join(pd.DataFrame(outlier_scores, columns=['outlier_score']))
-    joined['negative_outlier_factor'] = lof.negative_outlier_factor_
-
-    outliers = joined.loc[joined['outlier_score'] == -1]
-    outlier_cats = outliers.FAQ_id.unique()
-
-    final_df = joined[joined['FAQ_id'].isin(list(outlier_cats))]
-    final_df.loc[final_df['outlier_score'] == -1, 'outlier_score'] = 4
-    final_df['FAQ_id'] = pd.to_numeric(final_df['FAQ_id'])
-    return final_df
 
 
 def display_outliers(data):
@@ -147,7 +113,7 @@ def update_output(n_clicks):
     print(n_clicks)
     if n_clicks > 0:
         try:
-            outliers = get_outliers()
+            outliers = get_outliers(raw_data, embedded_data)
             return display_outliers(outliers)
         except Exception as e:
             print(e)
