@@ -117,11 +117,37 @@ def update_output(n_clicks):
             return display_outliers(outliers)
         except Exception as e:
             print(e)
+            return html.Div(
+                    children="Please load data.",
+                    style={"margin-left": "25px", "margin-top": "25px"},
+                )
+
+
+@app.callback(Output("tabs-figures", "children"), [Input("tabs", "value")])
+def render_tab(tab):
+    try:
+        if tab == "tab-0":
             return html.Div([
-                'Please load data'
+                display_scatter(),
+                display_outliers(embedded_data),
+                # html.Div(id='output-data-upload'),
+                # html.Button('Get Local Outliers', id='outliers-btn', n_clicks=0),
+                # html.Div(id='outlier-list'),
             ])
 
+        elif tab == "tab-1":
+            return html.Div(
+            )
 
+    except Exception as e:
+        print(e)
+        return html.Div(
+            children="Please load data.",
+            style={"margin-left": "25px", "margin-top": "25px"},
+        )
+
+
+app.config["suppress_callback_exceptions"] = True
 app.layout = html.Div(children=[
     html.H1(children='Multilingual NLP Explorer'),
 
@@ -132,10 +158,14 @@ app.layout = html.Div(children=[
     dcc.Upload(id='upload-data', children=html.Button('Upload Files'), multiple=True),
     html.Hr(),
 
-    html.Div(id='output-data-upload'),
-
-    html.Button('Get Local Outliers', id='outliers-btn', n_clicks=0),
-    html.Div(id='outlier-list'),
+    dcc.Tabs(
+        id="tabs",
+        value="tab-0",
+        children=[
+            dcc.Tab(label="Anomaly Detection", value="tab-0"),
+            dcc.Tab(label="Novelty Detection", value="tab-1"),
+        ],
+    ),
 ])
 
 if __name__ == '__main__':
