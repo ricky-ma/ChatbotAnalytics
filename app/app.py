@@ -7,12 +7,14 @@ import dash
 from dash.dependencies import Input, Output, State
 import dash_core_components as dcc
 import dash_html_components as html
+import dash_bootstrap_components as dbc
 import dash_table
 
 from analysis import get_outliers, load_data
+from database import db_get_faq_feedback, db_get_something_else_triggers
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 raw_data = None
 embedded_data = pd.DataFrame()
 
@@ -27,17 +29,17 @@ def parse_content(content, filename, is_vec):
             df = pd.read_csv(io.StringIO(decoded.decode('utf-8')), delimiter='\t', header=None)
         elif 'xls' in filename:
             df = pd.read_excel(io.BytesIO(decoded), header=None)
+        if is_vec:
+            df = df.drop(df.columns[0], axis=1)
+        else:
+            df.columns = df.iloc[0]
+            df = df[1:].reset_index(drop=True)
+        return df
     except Exception as e:
         print(e)
         return html.Div([
             'There was an error processing this file.'
         ])
-    if is_vec:
-        df = df.drop(df.columns[0], axis=1)
-    else:
-        df.columns = df.iloc[0]
-        df = df[1:].reset_index(drop=True)
-    return df
 
 
 def parse_contents(list_of_contents, list_of_names):
@@ -59,19 +61,37 @@ def parse_contents(list_of_contents, list_of_names):
         ])
 
 
-def display_outliers(data):
-    fig_outlier = go.Figure(data=go.Scatter(
-        x=data['x'],
-        y=data['y'],
-        mode='markers',
-        text=data['question'],
-        marker=dict(symbol=data['outlier_score'], color=data['FAQ_id'])
-    ))
-    table_data = data.drop(['outlier_score'], axis=1)[data['outlier_score'] == 4]
+def display_scatter():
+    print("Plotting scatterplot")
+    fig = px.scatter(embedded_data, x='x', y='y', color='FAQ_id', hover_name='question', title='UMAP Visualization')
+    # fig = px.scatter_3d(dataframe, x='x', y='y', z='z', color='FAQ_id', hover_name='question')
+    return html.Div([
+        dcc.Graph(
+            id='scatterplot',
+            figure=fig
+        ),
+    ])
+
+
+def display_outliers():
+    outliers = get_outliers(raw_data, embedded_data)
+    fig_outlier = go.Figure(
+        data=go.Scatter(
+            x=outliers['x'],
+            y=outliers['y'],
+            mode='markers',
+            text=outliers['question'],
+            marker=dict(symbol=outliers['outlier_score'], color=outliers['FAQ_id'])
+        ),
+    )
+    fig_outlier.update_layout(
+        title='Outliers'
+    )
+    table_data = outliers.drop(['outlier_score'], axis=1)[outliers['outlier_score'] == 4]
     return html.Div([
         dcc.Graph(
             id='scatterplot-outliers',
-            figure=fig_outlier
+            figure=fig_outlier,
         ),
         dash_table.DataTable(
             id='outlier_table',
@@ -83,15 +103,55 @@ def display_outliers(data):
     ])
 
 
-def display_scatter():
-    print("Plotting scatterplot")
-    fig = px.scatter(embedded_data, x='x', y='y', color='FAQ_id', hover_name='question')
-    # fig = px.scatter_3d(dataframe, x='x', y='y', z='z', color='FAQ_id', hover_name='question')
+def display_novelty():
+    pos_feedback, neg_feedback = db_get_faq_feedback()
+    something_else_triggers = db_get_something_else_triggers()
     return html.Div([
-        dcc.Graph(
-            id='scatterplot',
-            figure=fig
-        ),
+        dbc.Row([
+            dbc.Col(
+                html.Div(
+                    children=[
+                        html.H3('Feedback Upvotes'),
+                        dash_table.DataTable(
+                            id='upvote_table',
+                            columns=[{"name": 'text', "id": 'text'}],
+                            data=pos_feedback.to_dict('records')
+                        )
+                    ]
+                ),
+                width=3
+            ),
+            dbc.Col(
+                html.Div(
+                    children=[
+                        html.H3('Feedback Downvotes'),
+                        dash_table.DataTable(
+                            id='downvote_table',
+                            columns=[{"name": 'text', "id": 'text'}],
+                            data=neg_feedback.to_dict('records')
+                        )
+                    ]
+                ),
+                width=3
+            ),
+            dbc.Col(
+                html.Div("placeholder"),
+                width=6
+            )
+        ]),
+        dbc.Row([
+            dbc.Col(html.Div(
+                children=[
+                    html.H3('Something Else Triggers'),
+                    dash_table.DataTable(
+                        id='something_else_table',
+                        columns=[{"name": 'text', "id": 'text'}],
+                        data=something_else_triggers.to_dict('records')
+                    )
+                ]),
+                width=6
+            ),
+        ]),
     ])
 
 
@@ -127,16 +187,15 @@ def update_output(n_clicks):
 def render_tab(tab):
     try:
         if tab == "tab-0":
+
             return html.Div([
                 display_scatter(),
-                display_outliers(embedded_data),
-                # html.Div(id='output-data-upload'),
-                # html.Button('Get Local Outliers', id='outliers-btn', n_clicks=0),
-                # html.Div(id='outlier-list'),
+                display_outliers(),
             ])
 
         elif tab == "tab-1":
             return html.Div(
+                display_novelty()
             )
 
     except Exception as e:
@@ -157,6 +216,7 @@ app.layout = html.Div(children=[
     html.Hr(),
     dcc.Upload(id='upload-data', children=html.Button('Upload Files'), multiple=True),
     html.Hr(),
+    html.Div(id='output-data-upload'),
 
     dcc.Tabs(
         id="tabs",
@@ -166,6 +226,7 @@ app.layout = html.Div(children=[
             dcc.Tab(label="Novelty Detection", value="tab-1"),
         ],
     ),
+    html.Div(id="tabs-figures"),
 ])
 
 if __name__ == '__main__':
