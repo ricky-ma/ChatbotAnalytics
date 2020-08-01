@@ -10,7 +10,7 @@ import dash_html_components as html
 import dash_bootstrap_components as dbc
 import dash_table
 
-from analysis import get_outliers, load_data
+from analysis import get_outliers, load_data, get_novel_scores
 from database import db_get_faq_feedback, db_get_something_else_triggers
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
@@ -104,8 +104,17 @@ def display_outliers():
 
 
 def display_novelty():
+    print("Getting data from DB")
     pos_feedback, neg_feedback = db_get_faq_feedback()
     something_else_triggers = db_get_something_else_triggers()
+    frames = [something_else_triggers['text'], neg_feedback['utterance']]
+    novel = pd.concat(frames).reset_index(drop=True)
+
+    test_data, scores = get_novel_scores(novel)
+    novel = novel.to_frame(name='text')
+    novel['score'] = scores[scores['dataset'] == 'test']['score'].reset_index(drop=True)
+    histogram = px.histogram(scores, x='score', color='dataset')
+
     return html.Div([
         dbc.Row([
             dbc.Col(html.Div(
@@ -135,8 +144,14 @@ def display_novelty():
                 ]),
                 width=3
             ),
-            dbc.Col(
-                html.Div("placeholder"),
+            dbc.Col(html.Div(
+                children=[
+                    dcc.Graph(
+                        id='novelty_hist',
+                        figure=histogram
+                    ),
+                ]
+            ),
                 width=6
             )
         ]),
@@ -154,6 +169,20 @@ def display_novelty():
                 ]),
                 width=6
             ),
+            dbc.Col(html.Div(
+                children=[
+                    html.H3('Novelty Scores'),
+                    dash_table.DataTable(
+                        id='novelty_table',
+                        columns=[{"name": i, "id": i} for i in novel.columns],
+                        data=novel.to_dict('records'),
+                        fixed_rows={'headers': True},
+                        style_table={'height': 500},
+                        sort_action="native"
+                    )
+                ]),
+                width=6
+            )
         ]),
     ])
 

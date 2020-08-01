@@ -4,7 +4,7 @@ import umap
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
-from pyod.models.auto_encoder import AutoEncoder
+import tensorflow_hub as hub
 
 
 def load_data(df_vec, df_meta):
@@ -40,48 +40,64 @@ def get_outliers(raw_data, embedded_data):
     return final_df
 
 
-def reduce(dataframe, reducer='umap', n_comp=80):
-    if reducer == 'pca':
-        reducer = PCA(n_components=n_comp)
-    else:
-        reducer = umap.UMAP(n_components=n_comp)
-    # labels = pd.DataFrame(dataframe).join(metadata)['FAQ_id']
-    # scaled_data = StandardScaler().fit_transform(dataframe)
-    # embedding = reducer.fit_transform(scaled_data)
-    # labels = dataframe['category']
-    scaled_data = StandardScaler().fit_transform(dataframe.loc[:, '1'::])
+def lof(train_data, test_data):
+    clf = LocalOutlierFactor(n_neighbors=20, novelty=True, contamination='auto')
+    clf.fit(train_data)
+    y_train_scores = clf.negative_outlier_factor_
+    y_train_scores = pd.DataFrame(y_train_scores, columns=['score'])
+    y_train_scores['dataset'] = 'train'
+
+    #     y_pred_test = clf.predict(test_data)
+    y_test_scores = clf.score_samples(test_data)  # outlier scores
+    y_test_scores = pd.Series(y_test_scores, name='score')
+    y_test_scores = y_test_scores.to_frame()
+    y_test_scores['dataset'] = 'test'
+    return test_data, pd.concat([y_train_scores, y_test_scores]).reset_index(drop=True)
+
+
+def embed_text(text):
+    module_url = "https://tfhub.dev/google/universal-sentence-encoder/4"
+    embed = hub.load(module_url)
+    vecs = embed(text)
+    return pd.DataFrame(vecs)
+
+
+def reduce(dataframe, n_comp=200):
+    reducer = PCA(n_components=n_comp)
+    scaled_data = StandardScaler().fit_transform(dataframe)
     embedding = reducer.fit_transform(scaled_data)
     embedding = pd.DataFrame(embedding)
-    return embedding
+    return embedding, reducer
 
 
-def autoencode(train_data, test_data):
-    X_train = reduce(train_data)
-    X_test = reduce(test_data)
-    clf1 = AutoEncoder(hidden_neurons=[25, 15, 10, 2, 10, 15, 25])
-    clf1.fit(X_train)
+def get_novel_scores(novel):
+    print("Embedding text...")
+    novel_vecs = embed_text(novel)
+    print("Reducing components...")
+    # novel_vecs = reduce(novel_vecs)
 
-    # Get the outlier scores for the train data
-    y_train_scores = clf1.decision_scores_
+    # replace with actual trained dataset
+    train_vecs = pd.read_csv("./data/extracted_n26_tsv_vecs.tsv", delimiter='\t|,', header=None, engine='python')
+    train_vecs = train_vecs.drop(train_vecs.columns[0], axis=1)
+    # train_vecs = reduce(train_vecs)
 
-    # Predict the anomaly scores
-    y_test_scores = clf1.decision_function(X_test)  # outlier scores
-    y_test_scores = pd.Series(y_test_scores)
-    return X_test, y_test_scores
+    print("Fitting LOF...")
+    test_data, scores = lof(train_vecs, novel_vecs)
+    return test_data, scores
 
 
-def get_novel(X_test, y_test_scores, decision):
-    df_test = X_test.copy()
-    df_test['score'] = y_test_scores
-
-    # Lower score is non-novel, higher score is novel
-    # --> 0: non-novel, 1: novel
-    df_test['cluster'] = np.where(df_test['score'] < decision, 0, 1)
-    df_test['cluster'].value_counts()
-    # df_test.groupby('cluster').mean()
-
-    novel_df = df_test[df_test['cluster'] == 1]
-    return novel_df
+# def get_novel(X_test, y_test_scores, decision):
+#     df_test = X_test.copy()
+#     df_test['score'] = y_test_scores
+#
+#     # Lower score is non-novel, higher score is novel
+#     # --> 0: non-novel, 1: novel
+#     df_test['cluster'] = np.where(df_test['score'] < decision, 0, 1)
+#     df_test['cluster'].value_counts()
+#     # df_test.groupby('cluster').mean()
+#
+#     novel_df = df_test[df_test['cluster'] == 1]
+#     return novel_df
 
 
 def cluster_novel(novel_df):
