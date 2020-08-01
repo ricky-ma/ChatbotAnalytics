@@ -108,30 +108,31 @@ def display_novelty():
     something_else_triggers = db_get_something_else_triggers()
     return html.Div([
         dbc.Row([
-            dbc.Col(
-                html.Div(
-                    children=[
-                        html.H3('Feedback Upvotes'),
-                        dash_table.DataTable(
-                            id='upvote_table',
-                            columns=[{"name": 'text', "id": 'text'}],
-                            data=pos_feedback.to_dict('records')
-                        )
-                    ]
-                ),
+            dbc.Col(html.Div(
+                children=[
+                    html.H3('Feedback Upvotes'),
+                    dash_table.DataTable(
+                        id='upvote_table',
+                        columns=[{"name": 'utterance', "id": 'utterance'}],
+                        data=pos_feedback.to_dict('records'),
+                        fixed_rows={'headers': True},
+                        style_table={'height': 250}
+
+                    )
+                ]),
                 width=3
             ),
-            dbc.Col(
-                html.Div(
-                    children=[
-                        html.H3('Feedback Downvotes'),
-                        dash_table.DataTable(
-                            id='downvote_table',
-                            columns=[{"name": 'text', "id": 'text'}],
-                            data=neg_feedback.to_dict('records')
-                        )
-                    ]
-                ),
+            dbc.Col(html.Div(
+                children=[
+                    html.H3('Feedback Downvotes'),
+                    dash_table.DataTable(
+                        id='downvote_table',
+                        columns=[{"name": 'utterance', "id": 'utterance'}],
+                        data=neg_feedback.to_dict('records'),
+                        fixed_rows={'headers': True},
+                        style_table={'height': 250}
+                    )
+                ]),
                 width=3
             ),
             dbc.Col(
@@ -146,7 +147,9 @@ def display_novelty():
                     dash_table.DataTable(
                         id='something_else_table',
                         columns=[{"name": 'text', "id": 'text'}],
-                        data=something_else_triggers.to_dict('records')
+                        data=something_else_triggers.to_dict('records'),
+                        fixed_rows={'headers': True},
+                        style_table={'height': 500}
                     )
                 ]),
                 width=6
@@ -173,8 +176,7 @@ def update_output(n_clicks):
     print(n_clicks)
     if n_clicks > 0:
         try:
-            outliers = get_outliers(raw_data, embedded_data)
-            return display_outliers(outliers)
+            return display_outliers()
         except Exception as e:
             print(e)
             return html.Div(
