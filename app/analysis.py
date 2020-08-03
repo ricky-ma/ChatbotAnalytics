@@ -23,6 +23,21 @@ def load_data(df_vec, df_meta):
     return scaled_data, final_df
 
 
+def embed_text(text):
+    module_url = "https://tfhub.dev/google/universal-sentence-encoder/4"
+    embed = hub.load(module_url)
+    vecs = embed(text)
+    return pd.DataFrame(vecs)
+
+
+def reduce(dataframe, n_comp=200):
+    reducer = PCA(n_components=n_comp)
+    scaled_data = StandardScaler().fit_transform(dataframe)
+    embedding = reducer.fit_transform(scaled_data)
+    embedding = pd.DataFrame(embedding)
+    return embedding, reducer
+
+
 def get_outliers(raw_data, embedded_data):
     lof = LocalOutlierFactor(n_neighbors=10, contamination='auto')
     # Fit LOF on raw data
@@ -40,7 +55,7 @@ def get_outliers(raw_data, embedded_data):
     return final_df
 
 
-def lof(train_data, test_data):
+def get_novelties(train_data, test_data):
     clf = LocalOutlierFactor(n_neighbors=20, novelty=True, contamination='auto')
     clf.fit(train_data)
     y_train_scores = clf.negative_outlier_factor_
@@ -55,21 +70,6 @@ def lof(train_data, test_data):
     return test_data, pd.concat([y_train_scores, y_test_scores]).reset_index(drop=True)
 
 
-def embed_text(text):
-    module_url = "https://tfhub.dev/google/universal-sentence-encoder/4"
-    embed = hub.load(module_url)
-    vecs = embed(text)
-    return pd.DataFrame(vecs)
-
-
-def reduce(dataframe, n_comp=200):
-    reducer = PCA(n_components=n_comp)
-    scaled_data = StandardScaler().fit_transform(dataframe)
-    embedding = reducer.fit_transform(scaled_data)
-    embedding = pd.DataFrame(embedding)
-    return embedding, reducer
-
-
 def get_novel_scores(novel):
     print("Embedding text...")
     novel_vecs = embed_text(novel)
@@ -82,22 +82,8 @@ def get_novel_scores(novel):
     # train_vecs = reduce(train_vecs)
 
     print("Fitting LOF...")
-    test_data, scores = lof(train_vecs, novel_vecs)
+    test_data, scores = get_novelties(train_vecs, novel_vecs)
     return test_data, scores
-
-
-# def get_novel(X_test, y_test_scores, decision):
-#     df_test = X_test.copy()
-#     df_test['score'] = y_test_scores
-#
-#     # Lower score is non-novel, higher score is novel
-#     # --> 0: non-novel, 1: novel
-#     df_test['cluster'] = np.where(df_test['score'] < decision, 0, 1)
-#     df_test['cluster'].value_counts()
-#     # df_test.groupby('cluster').mean()
-#
-#     novel_df = df_test[df_test['cluster'] == 1]
-#     return novel_df
 
 
 def cluster_novel(novel_df):

@@ -11,7 +11,7 @@ import dash_bootstrap_components as dbc
 import dash_table
 
 from analysis import get_outliers, load_data, get_novel_scores
-from database import db_get_faq_feedback, db_get_something_else_triggers
+from database import db_get_faq_feedback, db_get_message_analytics
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
@@ -65,12 +65,15 @@ def display_scatter():
     print("Plotting scatterplot")
     fig = px.scatter(embedded_data, x='x', y='y', color='FAQ_id', hover_name='question', title='UMAP Visualization')
     # fig = px.scatter_3d(dataframe, x='x', y='y', z='z', color='FAQ_id', hover_name='question')
-    return html.Div([
-        dcc.Graph(
-            id='scatterplot',
-            figure=fig
-        ),
-    ])
+    return html.Div(
+        [
+            dcc.Graph(
+                id='scatterplot',
+                figure=fig
+            ),
+        ],
+        style={"margin-left": "5%", "margin-right": "5%"}
+    )
 
 
 def display_outliers():
@@ -88,25 +91,28 @@ def display_outliers():
         title='Outliers'
     )
     table_data = outliers.drop(['outlier_score'], axis=1)[outliers['outlier_score'] == 4]
-    return html.Div([
-        dcc.Graph(
-            id='scatterplot-outliers',
-            figure=fig_outlier,
-        ),
-        dash_table.DataTable(
-            id='outlier_table',
-            columns=[{"name": i, "id": i} for i in table_data.columns],
-            data=table_data.to_dict('records'),
-            filter_action="native",
-            sort_action="native"
-        )
-    ])
+    return html.Div(
+        [
+            dcc.Graph(
+                id='scatterplot-outliers',
+                figure=fig_outlier,
+            ),
+            dash_table.DataTable(
+                id='outlier_table',
+                columns=[{"name": i, "id": i} for i in table_data.columns],
+                data=table_data.to_dict('records'),
+                filter_action="native",
+                sort_action="native"
+            ),
+        ],
+        style={"margin-left": "5%", "margin-right": "5%"}
+    )
 
 
 def display_novelty():
     print("Getting data from DB")
     pos_feedback, neg_feedback = db_get_faq_feedback()
-    something_else_triggers = db_get_something_else_triggers()
+    something_else_triggers = db_get_message_analytics()
     frames = [something_else_triggers['text'], neg_feedback['utterance']]
     novel = pd.concat(frames).reset_index(drop=True)
 
@@ -116,74 +122,80 @@ def display_novelty():
     histogram = px.histogram(scores, x='score', color='dataset')
 
     return html.Div([
-        dbc.Row([
-            dbc.Col(html.Div(
-                children=[
-                    html.H3('Feedback Upvotes'),
-                    dash_table.DataTable(
-                        id='upvote_table',
-                        columns=[{"name": 'utterance', "id": 'utterance'}],
-                        data=pos_feedback.to_dict('records'),
-                        fixed_rows={'headers': True},
-                        style_table={'height': 250}
+        dbc.Row(
+            [
+                dbc.Col(html.Div(
+                    children=[
+                        html.H3('Feedback Upvotes'),
+                        dash_table.DataTable(
+                            id='upvote_table',
+                            columns=[{"name": 'utterance', "id": 'utterance'}],
+                            data=pos_feedback.to_dict('records'),
+                            fixed_rows={'headers': True},
+                            style_table={'height': 250}
 
-                    )
-                ]),
-                width=3
-            ),
-            dbc.Col(html.Div(
-                children=[
-                    html.H3('Feedback Downvotes'),
-                    dash_table.DataTable(
-                        id='downvote_table',
-                        columns=[{"name": 'utterance', "id": 'utterance'}],
-                        data=neg_feedback.to_dict('records'),
-                        fixed_rows={'headers': True},
-                        style_table={'height': 250}
-                    )
-                ]),
-                width=3
-            ),
-            dbc.Col(html.Div(
-                children=[
-                    dcc.Graph(
-                        id='novelty_hist',
-                        figure=histogram
-                    ),
-                ]
-            ),
-                width=6
-            )
-        ]),
-        dbc.Row([
-            dbc.Col(html.Div(
-                children=[
-                    html.H3('Something Else Triggers'),
-                    dash_table.DataTable(
-                        id='something_else_table',
-                        columns=[{"name": 'text', "id": 'text'}],
-                        data=something_else_triggers.to_dict('records'),
-                        fixed_rows={'headers': True},
-                        style_table={'height': 500}
-                    )
-                ]),
-                width=6
-            ),
-            dbc.Col(html.Div(
-                children=[
-                    html.H3('Novelty Scores'),
-                    dash_table.DataTable(
-                        id='novelty_table',
-                        columns=[{"name": i, "id": i} for i in novel.columns],
-                        data=novel.to_dict('records'),
-                        fixed_rows={'headers': True},
-                        style_table={'height': 500},
-                        sort_action="native"
-                    )
-                ]),
-                width=6
-            )
-        ]),
+                        )
+                    ]),
+                    width=3
+                ),
+                dbc.Col(html.Div(
+                    children=[
+                        html.H3('Feedback Downvotes'),
+                        dash_table.DataTable(
+                            id='downvote_table',
+                            columns=[{"name": 'utterance', "id": 'utterance'}],
+                            data=neg_feedback.to_dict('records'),
+                            fixed_rows={'headers': True},
+                            style_table={'height': 250}
+                        )
+                    ]),
+                    width=3
+                ),
+                dbc.Col(html.Div(
+                    children=[
+                        dcc.Graph(
+                            id='novelty_hist',
+                            figure=histogram
+                        ),
+                    ]
+                ),
+                    width=6
+                )
+            ],
+            style={"margin-left": "5%", "margin-right": "5%"}
+        ),
+        dbc.Row(
+            [
+                dbc.Col(html.Div(
+                    children=[
+                        html.H3('Something Else Triggers'),
+                        dash_table.DataTable(
+                            id='something_else_table',
+                            columns=[{"name": 'text', "id": 'text'}],
+                            data=something_else_triggers.to_dict('records'),
+                            fixed_rows={'headers': True},
+                            style_table={'height': 500}
+                        )
+                    ]),
+                    width=6
+                ),
+                dbc.Col(html.Div(
+                    children=[
+                        html.H3('Novelty Scores'),
+                        dash_table.DataTable(
+                            id='novelty_table',
+                            columns=[{"name": i, "id": i} for i in novel.columns],
+                            data=novel.to_dict('records'),
+                            fixed_rows={'headers': True},
+                            style_table={'height': 500},
+                            sort_action="native"
+                        )
+                    ]),
+                    width=6
+                )
+            ],
+            style={"margin-left": "5%", "margin-right": "5%"}
+        ),
     ])
 
 
@@ -226,7 +238,8 @@ def render_tab(tab):
 
         elif tab == "tab-1":
             return html.Div(
-                display_novelty()
+                display_novelty(),
+                style={"margin-top": "5%", "margin-bottom": "5%"}
             )
 
     except Exception as e:
@@ -239,13 +252,25 @@ def render_tab(tab):
 
 app.config["suppress_callback_exceptions"] = True
 app.layout = html.Div(children=[
-    html.H1(children='Multilingual NLP Explorer'),
+    html.H1(
+        children='Multilingual NLP Explorer',
+        style={"margin-top": "5%", "margin-left": "5%"}
+    ),
 
-    html.Div(children='''
-        Exploratory data analysis for multilingual NLP.
-    '''),
+    html.H3(
+        children='Visualization, anomaly detection, and novelty detection for multilingual text.',
+        style={"margin-left": "5%"},
+        className="text-muted"
+    ),
     html.Hr(),
-    dcc.Upload(id='upload-data', children=html.Button('Upload Files'), multiple=True),
+    dcc.Upload(
+        id='upload-data',
+        children=dbc.Button('Upload Files', style={"margin-left": "5%"}, className="btn btn-secondary btn-lg"),
+        multiple=True),
+    html.Div(
+        'Select one metadata file with text data and one file with the corresponding vector embeddings.',
+        style={"margin-left": "5%"}
+    ),
     html.Hr(),
     html.Div(id='output-data-upload'),
 
