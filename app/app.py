@@ -18,6 +18,10 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 raw_data = None
 embedded_data = pd.DataFrame()
 
+pos_feedback, neg_feedback = db_get_faq_feedback()
+something_else_triggers = db_get_message_analytics()
+novelty_scores = get_novel_scores(something_else_triggers['text'], pos_feedback['utterance'], neg_feedback['utterance'])
+
 
 def parse_content(content, filename, is_vec):
     content_type, content_string = content.split(',')
@@ -102,7 +106,8 @@ def display_outliers():
                 columns=[{"name": i, "id": i} for i in table_data.columns],
                 data=table_data.to_dict('records'),
                 filter_action="native",
-                sort_action="native"
+                sort_action="native",
+                css=[{'selector': '.row', 'rule': 'margin: 0'}]
             ),
         ],
         style={"margin-left": "5%", "margin-right": "5%"}
@@ -110,93 +115,39 @@ def display_outliers():
 
 
 def display_novelty():
-    print("Getting data from DB")
-    pos_feedback, neg_feedback = db_get_faq_feedback()
-    something_else_triggers = db_get_message_analytics()
-    frames = [something_else_triggers['text'], neg_feedback['utterance']]
-    novel = pd.concat(frames).reset_index(drop=True)
+    histogram = px.histogram(novelty_scores, x='score', color='dataset', title='Histogram of Novelty Scores')
+    txt_frames = [something_else_triggers['text'], pos_feedback['utterance'], neg_feedback['utterance']]
+    novel = pd.DataFrame()
+    novel['score'] = novelty_scores[novelty_scores['dataset'] != 'train']['score'].reset_index(drop=True)
+    novel['dataset'] = novelty_scores[novelty_scores['dataset'] != 'train']['dataset'].reset_index(drop=True)
+    novel['text'] = pd.concat(txt_frames).reset_index(drop=True)
+    novel['top intent'] = 'N/A'
+    novel['confidence'] = 'N/A'
+    top_intents = [sub['intent'] for sub in something_else_triggers['top_intent']]
+    confidences = [sub['confidence'] for sub in something_else_triggers['top_intent']]
+    novel['top intent'].loc[novel['dataset'] == 'something else'] = top_intents
+    novel['confidence'].loc[novel['dataset'] == 'something else'] = confidences
 
-    test_data, scores = get_novel_scores(novel)
-    novel = novel.to_frame(name='text')
-    novel['score'] = scores[scores['dataset'] == 'test']['score'].reset_index(drop=True)
-    histogram = px.histogram(scores, x='score', color='dataset')
-
-    return html.Div([
-        dbc.Row(
-            [
-                dbc.Col(html.Div(
-                    children=[
-                        html.H3('Feedback Upvotes'),
-                        dash_table.DataTable(
-                            id='upvote_table',
-                            columns=[{"name": 'utterance', "id": 'utterance'}],
-                            data=pos_feedback.to_dict('records'),
-                            fixed_rows={'headers': True},
-                            style_table={'height': 250}
-
-                        )
-                    ]),
-                    width=3
-                ),
-                dbc.Col(html.Div(
-                    children=[
-                        html.H3('Feedback Downvotes'),
-                        dash_table.DataTable(
-                            id='downvote_table',
-                            columns=[{"name": 'utterance', "id": 'utterance'}],
-                            data=neg_feedback.to_dict('records'),
-                            fixed_rows={'headers': True},
-                            style_table={'height': 250}
-                        )
-                    ]),
-                    width=3
-                ),
-                dbc.Col(html.Div(
-                    children=[
-                        dcc.Graph(
-                            id='novelty_hist',
-                            figure=histogram
-                        ),
-                    ]
-                ),
-                    width=6
-                )
-            ],
-            style={"margin-left": "5%", "margin-right": "5%"}
-        ),
-        dbc.Row(
-            [
-                dbc.Col(html.Div(
-                    children=[
-                        html.H3('Something Else Triggers'),
-                        dash_table.DataTable(
-                            id='something_else_table',
-                            columns=[{"name": 'text', "id": 'text'}],
-                            data=something_else_triggers.to_dict('records'),
-                            fixed_rows={'headers': True},
-                            style_table={'height': 500}
-                        )
-                    ]),
-                    width=6
-                ),
-                dbc.Col(html.Div(
-                    children=[
-                        html.H3('Novelty Scores'),
-                        dash_table.DataTable(
-                            id='novelty_table',
-                            columns=[{"name": i, "id": i} for i in novel.columns],
-                            data=novel.to_dict('records'),
-                            fixed_rows={'headers': True},
-                            style_table={'height': 500},
-                            sort_action="native"
-                        )
-                    ]),
-                    width=6
-                )
-            ],
-            style={"margin-left": "5%", "margin-right": "5%"}
-        ),
-    ])
+    return html.Div(
+        children=[
+            dcc.Graph(
+                id='novelty_hist',
+                figure=histogram
+            ),
+            html.H3('Novelty Scores'),
+            dash_table.DataTable(
+                id='novelty_table',
+                columns=[{"name": i, "id": i} for i in novel.columns],
+                data=novel.to_dict('records'),
+                fixed_rows={'headers': True},
+                style_table={'height': 500},
+                filter_action="native",
+                sort_action="native",
+                css=[{'selector': '.row', 'rule': 'margin: 0'}]
+            )
+        ],
+        style={"margin-left": "5%", "margin-right": "5%"}
+    )
 
 
 @app.callback(Output('output-data-upload', 'children'),

@@ -55,35 +55,45 @@ def get_outliers(raw_data, embedded_data):
     return final_df
 
 
-def get_novelties(train_data, test_data):
+def get_novelties(train_data, something_else, pos, neg):
     clf = LocalOutlierFactor(n_neighbors=20, novelty=True, contamination='auto')
     clf.fit(train_data)
     y_train_scores = clf.negative_outlier_factor_
     y_train_scores = pd.DataFrame(y_train_scores, columns=['score'])
     y_train_scores['dataset'] = 'train'
 
-    #     y_pred_test = clf.predict(test_data)
-    y_test_scores = clf.score_samples(test_data)  # outlier scores
-    y_test_scores = pd.Series(y_test_scores, name='score')
-    y_test_scores = y_test_scores.to_frame()
-    y_test_scores['dataset'] = 'test'
-    return test_data, pd.concat([y_train_scores, y_test_scores]).reset_index(drop=True)
+    something_else_scores = clf.score_samples(something_else)  # outlier scores
+    something_else_scores = pd.Series(something_else_scores, name='score')
+    something_else_scores = something_else_scores.to_frame()
+    something_else_scores['dataset'] = 'something else'
+
+    pos_scores = clf.score_samples(pos)  # outlier scores
+    pos_scores = pd.Series(pos_scores, name='score')
+    pos_scores = pos_scores.to_frame()
+    pos_scores['dataset'] = 'positive feedback'
+
+    neg_scores = clf.score_samples(neg)  # outlier scores
+    neg_scores = pd.Series(neg_scores, name='score')
+    neg_scores = neg_scores.to_frame()
+    neg_scores['dataset'] = 'negative feedback'
+
+    scores = pd.concat([y_train_scores, something_else_scores, pos_scores, neg_scores]).reset_index(drop=True)
+    return scores
 
 
-def get_novel_scores(novel):
+def get_novel_scores(something_else, pos, neg):
     print("Embedding text...")
-    novel_vecs = embed_text(novel)
-    print("Reducing components...")
-    # novel_vecs = reduce(novel_vecs)
+    something_else_vecs = embed_text(something_else)
+    pos_vecs = embed_text(pos)
+    neg_vecs = embed_text(neg)
 
     # replace with actual trained dataset
     train_vecs = pd.read_csv("./data/extracted_n26_tsv_vecs.tsv", delimiter='\t|,', header=None, engine='python')
     train_vecs = train_vecs.drop(train_vecs.columns[0], axis=1)
-    # train_vecs = reduce(train_vecs)
 
     print("Fitting LOF...")
-    test_data, scores = get_novelties(train_vecs, novel_vecs)
-    return test_data, scores
+    scores = get_novelties(train_vecs, something_else_vecs, pos_vecs, neg_vecs)
+    return scores
 
 
 def cluster_novel(novel_df):
