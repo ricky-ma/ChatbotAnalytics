@@ -10,17 +10,14 @@ import dash_html_components as html
 import dash_bootstrap_components as dbc
 import dash_table
 
-from analysis import get_outliers, load_data, get_novel_scores
-from database import db_get_faq_feedback, db_get_message_analytics
+from analysis import get_outliers, load_data, novel_df, analyze_mkts
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 raw_data = None
 embedded_data = pd.DataFrame()
-
-pos_feedback, neg_feedback = db_get_faq_feedback()
-something_else_triggers = db_get_message_analytics()
-novelty_scores = get_novel_scores(something_else_triggers['text'], pos_feedback['utterance'], neg_feedback['utterance'])
+novel = novel_df()
+mkt_analysis = analyze_mkts(novel)
 
 
 def parse_content(content, filename, is_vec):
@@ -107,7 +104,9 @@ def display_outliers():
                 data=table_data.to_dict('records'),
                 filter_action="native",
                 sort_action="native",
-                css=[{'selector': '.row', 'rule': 'margin: 0'}]
+                css=[{'selector': '.row', 'rule': 'margin: 0'}],
+                export_format="csv",
+                export_headers="display",
             ),
         ],
         style={"margin-left": "5%", "margin-right": "5%"}
@@ -115,19 +114,7 @@ def display_outliers():
 
 
 def display_novelty():
-    histogram = px.histogram(novelty_scores, x='score', color='dataset', title='Histogram of Novelty Scores')
-    txt_frames = [something_else_triggers['text'], pos_feedback['utterance'], neg_feedback['utterance']]
-    novel = pd.DataFrame()
-    novel['score'] = novelty_scores[novelty_scores['dataset'] != 'train']['score'].reset_index(drop=True)
-    novel['dataset'] = novelty_scores[novelty_scores['dataset'] != 'train']['dataset'].reset_index(drop=True)
-    novel['text'] = pd.concat(txt_frames).reset_index(drop=True)
-    novel['top intent'] = 'N/A'
-    novel['confidence'] = 'N/A'
-    top_intents = [sub['intent'] for sub in something_else_triggers['top_intent']]
-    confidences = [sub['confidence'] for sub in something_else_triggers['top_intent']]
-    novel['top intent'].loc[novel['dataset'] == 'something else'] = top_intents
-    novel['confidence'].loc[novel['dataset'] == 'something else'] = confidences
-
+    histogram = px.histogram(novel, x='score', color='dataset', title='Histogram of Novelty Scores')
     return html.Div(
         children=[
             dcc.Graph(
@@ -143,7 +130,9 @@ def display_novelty():
                 style_table={'height': 500},
                 filter_action="native",
                 sort_action="native",
-                css=[{'selector': '.row', 'rule': 'margin: 0'}]
+                css=[{'selector': '.row', 'rule': 'margin: 0'}],
+                export_format="csv",
+                export_headers="display",
             )
         ],
         style={"margin-left": "5%", "margin-right": "5%"}

@@ -5,6 +5,10 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import tensorflow_hub as hub
+from database import db_get_faq_feedback, db_get_message_analytics
+
+pos_feedback, neg_feedback = db_get_faq_feedback()
+something_else_triggers = db_get_message_analytics()
 
 
 def load_data(df_vec, df_meta):
@@ -96,6 +100,34 @@ def get_novel_scores(something_else, pos, neg):
     return scores
 
 
-def cluster_novel(novel_df):
-    novel_df = novel_df.drop(columns=['cluster', 'score'])
-    # TODO: implement automated clustering algorithm to find clusters
+def analyze_mkts(novel):
+    analysis = []
+    for market in novel['market'].unique():
+        mkt_cond = novel['market'] == market
+        num_pos = len(novel[(novel['dataset'] == 'positive feedback') & mkt_cond])
+        num_neg = len(novel[(novel['dataset'] == 'negative feedback') & mkt_cond])
+        avg_confidence = novel[mkt_cond]['confidence'].mean()
+        avg_novelty = novel[mkt_cond]['score'].mean()
+        analysis.append((market, num_pos, num_neg, avg_confidence, avg_novelty))
+    analysis_df = pd.DataFrame(analysis, columns=['market', 'positive feedbacks', 'negative feedbacks',
+                                                  'avg top intent confidence', 'avg novelty score'])
+    return analysis_df
+
+
+def novel_df():
+    novelty_scores = get_novel_scores(something_else_triggers['text'], pos_feedback['utterance'],
+                                      neg_feedback['utterance'])
+    txt_frames = [something_else_triggers['text'], pos_feedback['utterance'], neg_feedback['utterance']]
+    mkt_frames = [something_else_triggers['market'], pos_feedback['market'], neg_feedback['market']]
+    novel = pd.DataFrame()
+    novel['score'] = novelty_scores[novelty_scores['dataset'] != 'train']['score'].reset_index(drop=True)
+    novel['dataset'] = novelty_scores[novelty_scores['dataset'] != 'train']['dataset'].reset_index(drop=True)
+    novel['text'] = pd.concat(txt_frames).reset_index(drop=True)
+    novel['market'] = pd.concat(mkt_frames).reset_index(drop=True)
+    novel['top intent'] = None
+    novel['confidence'] = None
+    top_intents = [sub['intent'] for sub in something_else_triggers['top_intent']]
+    confidences = [sub['confidence'] for sub in something_else_triggers['top_intent']]
+    novel['top intent'].loc[novel['dataset'] == 'something else'] = top_intents
+    novel['confidence'].loc[novel['dataset'] == 'something else'] = confidences
+    return novel
