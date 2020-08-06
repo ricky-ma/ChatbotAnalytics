@@ -106,11 +106,12 @@ def analyze_mkts(novel):
         mkt_cond = novel['market'] == market
         num_pos = len(novel[(novel['dataset'] == 'positive feedback') & mkt_cond])
         num_neg = len(novel[(novel['dataset'] == 'negative feedback') & mkt_cond])
+        num_something_else = len(novel[(novel['dataset'] == 'something else') & mkt_cond])
         avg_confidence = novel[mkt_cond]['confidence'].mean()
         avg_novelty = novel[mkt_cond]['score'].mean()
-        analysis.append((market, num_pos, num_neg, avg_confidence, avg_novelty))
+        analysis.append((market, num_pos, num_neg, num_something_else, avg_confidence, avg_novelty))
     analysis_df = pd.DataFrame(analysis, columns=['market', 'positive feedbacks', 'negative feedbacks',
-                                                  'avg top intent confidence', 'avg novelty score'])
+                                                  'something else', 'avg top intent confidence', 'avg novelty score'])
     return analysis_df
 
 
@@ -119,13 +120,17 @@ def novel_df():
                                       neg_feedback['utterance'])
     txt_frames = [something_else_triggers['text'], pos_feedback['utterance'], neg_feedback['utterance']]
     mkt_frames = [something_else_triggers['market'], pos_feedback['market'], neg_feedback['market']]
+
     novel = pd.DataFrame()
     novel['score'] = novelty_scores[novelty_scores['dataset'] != 'train']['score'].reset_index(drop=True)
     novel['dataset'] = novelty_scores[novelty_scores['dataset'] != 'train']['dataset'].reset_index(drop=True)
-    novel['text'] = pd.concat(txt_frames).reset_index(drop=True)
     novel['market'] = pd.concat(mkt_frames).reset_index(drop=True)
+    novel['text'] = pd.concat(txt_frames).reset_index(drop=True)
+
     novel['top intent'] = None
     novel['confidence'] = None
+    novel['top intent'].loc[novel['dataset'] == 'positive feedback'] = pos_feedback['faq_id']
+    novel['top intent'].loc[novel['dataset'] == 'negative feedback'] = neg_feedback['faq_id']
     top_intents = [sub['intent'] for sub in something_else_triggers['top_intent']]
     confidences = [sub['confidence'] for sub in something_else_triggers['top_intent']]
     novel['top intent'].loc[novel['dataset'] == 'something else'] = top_intents

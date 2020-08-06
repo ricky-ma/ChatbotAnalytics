@@ -115,12 +115,15 @@ def display_outliers():
 
 def display_novelty():
     histogram = px.histogram(novel, x='score', color='dataset', title='Histogram of Novelty Scores')
+    mkt_feedback_bar = display_market_feedback()
+    mkt_novel_bar = display_market_novelty()
     return html.Div(
         children=[
-            dcc.Graph(
-                id='novelty_hist',
-                figure=histogram
-            ),
+            html.Div(dcc.Graph(id='novelty_hist', figure=histogram)),
+            dbc.Row([
+                dbc.Col(dcc.Graph(id='mkt_feedback_bar', figure=mkt_feedback_bar), width=6),
+                dbc.Col(dcc.Graph(id='mkt_novel_bar', figure=mkt_novel_bar), width=6),
+            ]),
             html.H3('Novelty Scores'),
             dash_table.DataTable(
                 id='novelty_table',
@@ -135,8 +138,61 @@ def display_novelty():
                 export_headers="display",
             )
         ],
-        style={"margin-left": "5%", "margin-right": "5%"}
+        style={"margin-left": "5%", "margin-right": "5%", "margin-top": "5%", "margin-bottom": "5%"}
     )
+
+
+def display_market_feedback():
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=mkt_analysis['market'],
+                         y=mkt_analysis['positive feedbacks'],
+                         name='positive feedbacks',
+                         marker_color='rgb(26, 118, 255)'
+                         ))
+    fig.add_trace(go.Bar(x=mkt_analysis['market'],
+                         y=mkt_analysis['negative feedbacks'],
+                         name='negative feedbacks',
+                         marker_color='rgb(55, 83, 109)'
+                         ))
+    fig.add_trace(go.Bar(x=mkt_analysis['market'],
+                         y=mkt_analysis['something else'],
+                         name='something else',
+                         marker_color='rgb(20, 40, 150)'
+                         ))
+    fig.update_layout(
+        title='Chatbot Feedback by Market',
+        xaxis_tickfont_size=14,
+        yaxis=dict(title='count', titlefont_size=16, tickfont_size=14),
+        legend=dict(x=0, y=1.0, bgcolor='rgba(255, 255, 255, 0)', bordercolor='rgba(255, 255, 255, 0)'),
+        barmode='group',
+        bargap=0.15,  # gap between bars of adjacent location coordinates.
+        bargroupgap=0.1  # gap between bars of the same location coordinate.
+    )
+    return fig
+
+
+def display_market_novelty():
+    fig = go.Figure()
+    fig.add_trace(go.Bar(x=mkt_analysis['market'],
+                         y=mkt_analysis['avg top intent confidence'],
+                         name='avg top intent confidence',
+                         marker_color='rgb(26, 118, 255)'
+                         ))
+    fig.add_trace(go.Bar(x=mkt_analysis['market'],
+                         y=mkt_analysis['avg novelty score'],
+                         name='avg novelty score',
+                         marker_color='rgb(55, 83, 109)'
+                         ))
+    fig.update_layout(
+        title='Chatbot Confidence and Novelty by Market',
+        xaxis_tickfont_size=14,
+        yaxis=dict(title='count', titlefont_size=16, tickfont_size=14),
+        legend=dict(x=0, y=1.0, bgcolor='rgba(255, 255, 255, 0)', bordercolor='rgba(255, 255, 255, 0)'),
+        barmode='group',
+        bargap=0.15,  # gap between bars of adjacent location coordinates.
+        bargroupgap=0.1  # gap between bars of the same location coordinate.
+    )
+    return fig
 
 
 @app.callback(Output('output-data-upload', 'children'),
@@ -170,17 +226,13 @@ def update_output(n_clicks):
 def render_tab(tab):
     try:
         if tab == "tab-0":
-
             return html.Div([
                 display_scatter(),
                 display_outliers(),
             ])
 
         elif tab == "tab-1":
-            return html.Div(
-                display_novelty(),
-                style={"margin-top": "5%", "margin-bottom": "5%"}
-            )
+            return display_novelty()
 
     except Exception as e:
         print(e)
@@ -193,7 +245,7 @@ def render_tab(tab):
 app.config["suppress_callback_exceptions"] = True
 app.layout = html.Div(children=[
     html.H1(
-        children='Multilingual NLP Explorer',
+        children='Multilingual Chatbot Analytics',
         style={"margin-top": "5%", "margin-left": "5%"}
     ),
 
