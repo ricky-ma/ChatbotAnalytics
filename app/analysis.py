@@ -1,5 +1,4 @@
 import pandas as pd
-import numpy as np
 import umap
 from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import StandardScaler
@@ -8,7 +7,8 @@ import tensorflow_hub as hub
 from database import db_get_faq_feedback, db_get_message_analytics
 
 pos_feedback, neg_feedback = db_get_faq_feedback()
-something_else_triggers = db_get_message_analytics()
+something_else_triggers = db_get_message_analytics(something_else=True)
+all_messages = db_get_message_analytics(something_else=False)
 
 
 def load_data(df_vec, df_meta):
@@ -92,7 +92,9 @@ def get_novel_scores(something_else, pos, neg):
     neg_vecs = embed_text(neg)
 
     # replace with actual trained dataset
-    train_vecs = pd.read_csv("./data/extracted_n26_tsv_vecs.tsv", delimiter='\t|,', header=None, engine='python')
+    # train_vecs = pd.read_csv("./data/extracted_n26_tsv_vecs.tsv", delimiter='\t|,', header=None, engine='python')
+    train_vecs = pd.read_csv("C:/Users/mrric/!Projects/Algomo/ChatbotAnalytics/data/extracted_n26_tsv_vecs.tsv",
+                             delimiter='\t|,', header=None, engine='python')
     train_vecs = train_vecs.drop(train_vecs.columns[0], axis=1)
 
     print("Fitting LOF...")
@@ -136,3 +138,25 @@ def novel_df():
     novel['top intent'].loc[novel['dataset'] == 'something else'] = top_intents
     novel['confidence'].loc[novel['dataset'] == 'something else'] = confidences
     return novel
+
+
+def confidence_over_time():
+    confidence_map = []
+    for intent_dict in all_messages['top_intent']:
+        if 'confidence' in intent_dict.keys():
+            confidence_map.append(True)
+        else:
+            confidence_map.append(False)
+    x = all_messages[confidence_map]
+    df = pd.DataFrame()
+    top_intents = [sub['intent'] for sub in x['top_intent']]
+    confidences = [sub['confidence'] for sub in x['top_intent']]
+    df['top intent'] = top_intents
+    df['confidence'] = pd.to_numeric(confidences)
+    # df['market'] = something_else_triggers['market']
+
+    df['timestamp'] = x['ts_in_db'].reset_index(drop=True)
+    df = df.groupby(pd.Grouper(key="timestamp", freq="1W")).mean()
+    df['timestamp'] = df.index
+    return df
+

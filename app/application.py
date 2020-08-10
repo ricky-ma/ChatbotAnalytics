@@ -10,14 +10,16 @@ import dash_html_components as html
 import dash_bootstrap_components as dbc
 import dash_table
 
-from analysis import get_outliers, load_data, novel_df, analyze_mkts
+from analysis import get_outliers, load_data, novel_df, analyze_mkts, confidence_over_time
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
+application = app.server
 raw_data = None
 embedded_data = pd.DataFrame()
 novel = novel_df()
 mkt_analysis = analyze_mkts(novel)
+time_series = confidence_over_time()
 
 
 def parse_content(content, filename, is_vec):
@@ -117,12 +119,14 @@ def display_novelty():
     histogram = px.histogram(novel, x='score', color='dataset', title='Histogram of Novelty Scores')
     mkt_feedback_bar = display_market_feedback()
     mkt_novel_bar = display_market_novelty()
+    time_series_line = display_time_series()
     return html.Div(
         children=[
             html.Div(dcc.Graph(id='novelty_hist', figure=histogram)),
             dbc.Row([
                 dbc.Col(dcc.Graph(id='mkt_feedback_bar', figure=mkt_feedback_bar), width=6),
                 dbc.Col(dcc.Graph(id='mkt_novel_bar', figure=mkt_novel_bar), width=6),
+                dbc.Col(dcc.Graph(id='conf_line', figure=time_series_line), width=12),
             ]),
             html.H3('Novelty Scores'),
             dash_table.DataTable(
@@ -192,6 +196,14 @@ def display_market_novelty():
         bargap=0.15,  # gap between bars of adjacent location coordinates.
         bargroupgap=0.1  # gap between bars of the same location coordinate.
     )
+    return fig
+
+
+def display_time_series():
+    fig = px.line(time_series, x="timestamp", y="confidence", title="Weekly Avg Chatbot Confidence"
+                  # color="market", line_group="market", hover_name="market"
+                  )
+    fig.update_xaxes(rangeslider_visible=True)
     return fig
 
 
@@ -270,12 +282,12 @@ app.layout = html.Div(children=[
         id="tabs",
         value="tab-0",
         children=[
-            dcc.Tab(label="Anomaly Detection", value="tab-0"),
-            dcc.Tab(label="Novelty Detection", value="tab-1"),
+            dcc.Tab(label="Model Analysis", value="tab-0"),
+            dcc.Tab(label="Feedback Analysis", value="tab-1"),
         ],
     ),
     html.Div(id="tabs-figures"),
 ])
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    application.run(debug=True, port=8080)
