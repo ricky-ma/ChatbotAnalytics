@@ -3,12 +3,18 @@ import pandas as pd
 from ast import literal_eval
 
 mydb = mysql.connector.connect(
-    
+    host="operational-database.cbx9y51d5tds.eu-west-1.rds.amazonaws.com",
+    user="opSiLdEpiE",
+    db="platform_prod",
+    password="hZ2#*7*kcp$WX5yD6Km&HTYs7CG"
 )
 cursor = mydb.cursor()
 
 
 def db_get_faq_feedback():
+    """
+    :return: user utterances resulting in positive and negative feedback
+    """
     cursor.execute("SELECT F.id, F.utterance, F.correct, F.faq_id, M.market "
                    "FROM faq_feedback_multilg F, markets M "
                    "WHERE F.market_id = M.market_id")
@@ -19,6 +25,10 @@ def db_get_faq_feedback():
 
 
 def db_get_message_analytics(something_else):
+    """
+    :param something_else: return only something else triggers if true, otherwise return all text
+    :return: user utterances from message_analytics
+    """
     cursor.execute("SELECT ts_in_db, top_intent, user_event, market "
                    "FROM message_analytics MS "
                    "LEFT JOIN  markets M ON MS.market_id = M.market_id")

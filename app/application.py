@@ -14,6 +14,7 @@ from analysis import get_outliers, load_data, novel_df, analyze_mkts, confidence
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
+app.scripts.config.serve_locally = True
 application = app.server
 raw_data = None
 embedded_data = pd.DataFrame()
@@ -290,4 +291,4 @@ app.layout = html.Div(children=[
 ])
 
 if __name__ == '__main__':
-    application.run(debug=True, port=8080)
+    application.run(host="0.0.0.0")
