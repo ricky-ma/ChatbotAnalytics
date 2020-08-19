@@ -10,12 +10,14 @@ import dash_html_components as html
 import dash_bootstrap_components as dbc
 import dash_table
 
-from analysis import get_outliers, load_data, novel_df, analyze_mkts, confidence_over_time
+from app.analysis import get_outliers, load_data, novel_df, analyze_mkts, confidence_over_time
 
 external_stylesheets = ['https://codepen.io/chriddyp/pen/bWLwgP.css']
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.FLATLY])
 app.scripts.config.serve_locally = True
+app.css.config.serve_locally = True
 application = app.server
+
 raw_data = None
 embedded_data = pd.DataFrame()
 novel = novel_df()
@@ -291,4 +293,4 @@ app.layout = html.Div(children=[
 ])
 
 if __name__ == '__main__':
-    application.run(host="0.0.0.0")
+    application.run(debug=True, port=8080)

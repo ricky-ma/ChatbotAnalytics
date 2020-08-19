@@ -4,7 +4,7 @@ from sklearn.neighbors import LocalOutlierFactor
 from sklearn.preprocessing import StandardScaler
 from sklearn.decomposition import PCA
 import tensorflow_hub as hub
-from database import db_get_faq_feedback, db_get_message_analytics
+from app.database import db_get_faq_feedback, db_get_message_analytics
 
 pos_feedback, neg_feedback = db_get_faq_feedback()
 something_else_triggers = db_get_message_analytics(something_else=True)
